@@ -7,44 +7,70 @@ from fabric.api import env, puts, abort, cd, hide, task
 from fabric.operations import sudo, settings, run
 from fabric.contrib import console
 from fabric.contrib.files import upload_template
+from fabric.contrib.console import confirm
+from fabric.context_managers import prefix, shell_env
 
 from fabric.colors import _wrap_with, green
 
 green_bg = _wrap_with('42')
 red_bg = _wrap_with('41')
-fagungis_path = dirname(abspath(__file__))
+fabungis_path = dirname(abspath(__file__))
 
 
 ##########################
 ## START Fagungis tasks ##
 ##########################
 
-
 @task
 def setup():
+    puts(green_bg('Start setup...'))
+    start_time = datetime.now()
+
+    _verify_sudo()
+    _install_dependencies()
+    _create_rails_user()
+    _setup_directories()
+    _git_clone()
+    _install_rvm()
+    _install_require_gems()
+    _asset_precompile()
+    _upload_nginx_conf()
+    _upload_unicorn_rb()
+    _upload_rununicorn_script()
+    _upload_supervisord_conf()
+
+
+    end_time = datetime.now()
+    finish_message = '[%s] Correctly finished in %i seconds' % \
+    (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
+    puts(finish_message)
+
+
+@task
+def setup_old():
     #  test configuration start
     if not test_configuration():
-        if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
+        if not confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
     #  test configuration end
     if env.ask_confirmation:
-        if not console.confirm("Are you sure you want to setup %s?" % red_bg(env.project.upper()), default=False):
+        if not confirm("Are you sure you want to setup %s?" % red_bg(env.project.upper()), default=False):
             abort("Aborting at user request.")
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
-    _verify_sudo
-    _install_dependencies()
-    _create_django_user()
-    _setup_directories()
-    _hg_clone()
-    _install_virtualenv()
-    _create_virtualenv()
-    _install_gunicorn()
-    _install_requirements()
-    _upload_nginx_conf()
-    _upload_rungunicorn_script()
-    _upload_supervisord_conf()
+    # _verify_sudo
+    # _install_dependencies()
+    # _create_rails_user()
+    # _setup_directories()
+    # _hg_clone()
+    # _install_virtualenv()
+    # _create_virtualenv()
+    # _install_gunicorn()
+    # # _install_requirements()
+    # _upload_nginx_conf()
+    # _upload_rungunicorn_script()
+    # _upload_supervisord_conf()
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly finished in %i seconds' % \
@@ -56,24 +82,24 @@ def setup():
 def deploy():
     #  test configuration start
     if not test_configuration():
-        if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
+        if not confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
     #  test configuration end
     _verify_sudo()
     if env.ask_confirmation:
-        if not console.confirm("Are you sure you want to deploy in %s?" % red_bg(env.project.upper()), default=False):
+        if not confirm("Are you sure you want to deploy in %s?" % red_bg(env.project.upper()), default=False):
             abort("Aborting at user request.")
     puts(green_bg('Start deploy...'))
     start_time = datetime.now()
 
-    hg_pull()
-    _install_requirements()
-    _upload_nginx_conf()
-    _upload_rungunicorn_script()
-    _upload_supervisord_conf()
-    _prepare_django_project()
-    _prepare_media_path()
-    _supervisor_restart()
+    # hg_pull()
+    # # _install_requirements()
+    # _upload_nginx_conf()
+    # _upload_rungunicorn_script()
+    # _upload_supervisord_conf()
+    # _prepare_rails_project()
+    # _prepare_media_path()
+    # _supervisor_restart()
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly deployed in %i seconds' % \
@@ -82,9 +108,9 @@ def deploy():
 
 
 @task
-def hg_pull():
+def git_pull():
     with cd(env.code_root):
-        sudo('hg pull -u')
+        sudo('git pull', user=env.rails_user)
 
 
 @task
@@ -103,18 +129,18 @@ def test_configuration(verbose=True):
         errors.append('Hosts configuration missing')
     elif verbose:
         parameters_info.append(('Hosts', env.hosts))
-    if 'django_user' not in env or not env.django_user:
-        errors.append('Django user missing')
+    if 'rails_user' not in env or not env.rails_user:
+        errors.append('rails user missing')
     elif verbose:
-        parameters_info.append(('Django user', env.django_user))
-    if 'django_user_group' not in env or not env.django_user_group:
-        errors.append('Django user group missing')
+        parameters_info.append(('rails user', env.rails_user))
+    if 'rails_user_group' not in env or not env.rails_user_group:
+        errors.append('rails user group missing')
     elif verbose:
-        parameters_info.append(('Django user group', env.django_user_group))
-    if 'django_user_home' not in env or not env.django_user_home:
-        errors.append('Django user home dir missing')
+        parameters_info.append(('rails user group', env.rails_user_group))
+    if 'rails_user_home' not in env or not env.rails_user_home:
+        errors.append('rails user home dir missing')
     elif verbose:
-        parameters_info.append(('Django user home dir', env.django_user_home))
+        parameters_info.append(('rails user home dir', env.rails_user_home))
     if 'projects_path' not in env or not env.projects_path:
         errors.append('Projects path configuration missing')
     elif verbose:
@@ -123,22 +149,22 @@ def test_configuration(verbose=True):
         errors.append('Code root configuration missing')
     elif verbose:
         parameters_info.append(('Code root', env.code_root))
-    if 'django_project_root' not in env or not env.django_project_root:
-        errors.append('Django project root configuration missing')
+    if 'rails_project_root' not in env or not env.rails_project_root:
+        errors.append('rails project root configuration missing')
     elif verbose:
-        parameters_info.append(('Django project root', env.django_project_root))
-    if 'django_project_settings' not in env or not env.django_project_settings:
-        env.django_project_settings = 'settings'
+        parameters_info.append(('rails project root', env.rails_project_root))
+    if 'rails_project_settings' not in env or not env.rails_project_settings:
+        env.rails_project_settings = 'settings'
     if verbose:
-        parameters_info.append(('django_project_settings', env.django_project_settings))
-    if 'django_media_path' not in env or not env.django_media_path:
-        errors.append('Django media path configuration missing')
+        parameters_info.append(('rails_project_settings', env.rails_project_settings))
+    if 'rails_media_path' not in env or not env.rails_media_path:
+        errors.append('rails media path configuration missing')
     elif verbose:
-        parameters_info.append(('Django media path', env.django_media_path))
-    if 'django_static_path' not in env or not env.django_static_path:
-        errors.append('Django static path configuration missing')
+        parameters_info.append(('rails media path', env.rails_media_path))
+    if 'rails_static_path' not in env or not env.rails_static_path:
+        errors.append('rails static path configuration missing')
     elif verbose:
-        parameters_info.append(('Django static path', env.django_static_path))
+        parameters_info.append(('rails static path', env.rails_static_path))
     if 'south_used' not in env:
         errors.append('"south_used" configuration missing')
     elif verbose:
@@ -262,103 +288,269 @@ def test_configuration(verbose=True):
 ########################
 
 
-def _create_django_user():
-    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
-        res = sudo('useradd -d %(django_user_home)s -m -r %(django_user)s' % env)
-    if 'already exists' in res:
-        puts('User \'%(django_user)s\' already exists, will not be changed.' % env)
-        return
-    #  set password
-    sudo('passwd %(django_user)s' % env)
-
-
 def _verify_sudo():
     ''' we just check if the user is sudoers '''
     sudo('cd .')
 
 
-def _install_nginx():
-    # add nginx stable ppa
-    sudo("add-apt-repository ppa:nginx/stable")
-    sudo("apt-get update")
-    sudo("apt-get -y install nginx")
-    sudo("/etc/init.d/nginx start")
-
-
 def _install_dependencies():
     ''' Ensure those Debian/Ubuntu packages are installed '''
     packages = [
-        "python-software-properties",
-        "python-dev",
-        "build-essential",
+        "gcc-c++",
+        "curl",
+        "libcurl-devel",
+        "libcurl",
+        "patch",
+        "readline",
+        "readline-devel",
+        "zlib",
+        "zlib-devel",
+        "libyaml-devel",
+        "libffi-devel",
+        "openssl-devel",
+        "make",
+        "bzip2",
+        "autoconf",
+        "automake",
+        "libtool",
+        "bison",
+        "git-core",
+        "sqlite",
+        "sqlite-devel",
         "python-pip",
-        "supervisor",
     ]
-    sudo("apt-get update")
-    sudo("apt-get -y install %s" % " ".join(packages))
+
+    _add_yum_repos()
+
+    sudo("yum -y update")
+    sudo("yum -y groupinstall 'Development Tools'")
+    sudo("yum -y install %s" % " ".join(packages))
+    sudo("yum -y --enablerepo=rpmforge-extras upgrade git")
     if "additional_packages" in env and env.additional_packages:
-        sudo("apt-get -y install %s" % " ".join(env.additional_packages))
+        sudo("yum -y install %s" % " ".join(env.additional_packages))
+
     _install_nginx()
-    sudo("pip install --upgrade pip")
+    _install_supervisor()
+
+    if confirm('Do you want to install Redis at target server?'):
+        _install_redis()
 
 
-def _install_requirements():
-    ''' you must have a file called requirements.txt in your project root'''
-    if 'requirements_file' in env and env.requirements_file:
-        virtenvsudo('pip install -r %s' % env.requirements_file)
+def _add_yum_repos():
+    sudo('rpm --import http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-6')
+    try:
+        sudo('rpm -Uvh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm')
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    sudo('rpm --import http://apt.sw.be/RPM-GPG-KEY.dag.txt')
+    try:
+        sudo('rpm -ivh http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm')
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
 
 
-def _install_gunicorn():
-    """ force gunicorn installation into your virtualenv, even if it's installed globally.
-    for more details: https://github.com/benoitc/gunicorn/pull/280 """
-    virtenvsudo('pip install -I gunicorn')
+def _install_nginx():
+    sudo("yum -y install nginx")
+    sudo("chkconfig nginx on")
+    sudo("service nginx start")
 
 
-def _install_virtualenv():
-    sudo('pip install virtualenv')
+def _install_supervisor():
+    sudo("pip install supervisor")
+    try:
+        sudo('mkdir /etc/supervisord.d')
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    sudo("echo_supervisord_conf > /etc/supervisord.conf")
+    sudo("echo [include] >> /etc/supervisord.conf")
+    sudo("echo files = /etc/supervisord.d/*.conf >> /etc/supervisord.conf")
+
+    if isfile('conf/supervisord'):
+        ''' we use user defined supervisord template '''
+        template = 'conf/supervisord'
+    else:
+        template = '%s/conf/supervisord' % fabungis_path
+    upload_template(template, '/etc/init.d/supervisord',
+                    context=env, backup=False, use_sudo=True)
+
+    sudo('chmod +x /etc/init.d/supervisord')
+
+    sudo("chkconfig --add supervisord")
+    sudo("chkconfig supervisord on")
+
+    try:
+        sudo("service supervisord restart")
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
 
 
-def _create_virtualenv():
-    sudo('virtualenv --%s %s' % (' --'.join(env.virtenv_options), env.virtenv))
+def _install_redis():
+    sudo('rpm --import http://rpms.famillecollet.com/RPM-GPG-KEY-remi')
+
+    try:
+        sudo('rpm -Uvh http://rpms.famillecollet.com/enterprise/remi-release-6.rpm')
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    sudo('yum -y --enablerepo=remi install redis')
+    sudo('chkconfig redis on')
+    sudo('service redis start')
+
+
+def _create_rails_user():
+    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
+        res = sudo('useradd -d %(rails_user_home)s -m -r %(rails_user)s' % env)
+    if 'already exists' in res:
+        puts('User \'%(rails_user)s\' already exists, will not be changed.' % env)
+        return
+    #  set password
+    sudo('passwd %(rails_user)s' % env)
 
 
 def _setup_directories():
-    sudo('mkdir -p %(projects_path)s' % env)
-    # sudo('mkdir -p %(django_user_home)s/logs/nginx' % env)  # Not used
-    # prepare gunicorn_logfile
-    sudo('mkdir -p %s' % dirname(env.gunicorn_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.gunicorn_logfile)))
-    sudo('chmod -R 775 %s' % dirname(env.gunicorn_logfile))
-    sudo('touch %s' % env.gunicorn_logfile)
-    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
-    # prepare supervisor_stdout_logfile
-    sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.supervisor_stdout_logfile)))
-    sudo('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('touch %s' % env.supervisor_stdout_logfile)
-    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
+    try:
+        sudo('mkdir -p %(projects_path)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
 
-    sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
-    sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
-    sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
-    # sudo('mkdir -p %(django_user_home)s/tmp' % env)  # Not used
-    sudo('mkdir -p %(virtenv)s' % env)
-    sudo('mkdir -p %(nginx_htdocs)s' % env)
-    sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
+        # sudo('mkdir -p %(rails_user_home)s/logs/nginx' % env)  # Not used
+        # prepare gunicorn_logfile
+    try:
+        sudo('mkdir -p %s' % dirname(env.unicorn_logfile))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+        # puts('chmod -R 775 %s' % dirname(env.unicorn_logfile))
+    try:
+        sudo('touch %s' % env.unicorn_logfile)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+        # prepare supervisor_stdout_logfile
+    try:
+        sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+        # puts('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
+    try:
+        sudo('touch %s' % env.supervisor_stdout_logfile)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %s' % dirname(env.rununicorn_script))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %(nginx_htdocs)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %s' % dirname(env.unicorn_rb))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir -p %(unicorn_pids)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    sudo('chown -R %s %s' % (env.rails_user, env.rails_user_home))
 
 
-def virtenvrun(command):
-    activate = 'source %s/bin/activate' % env.virtenv
-    run(activate + ' && ' + command)
+def _git_clone():
+    try:
+        sudo('git clone %s %s' % (env.repository, env.code_root))
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('mkdir %s/tmp' % env.code_root)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    with cd(env.code_root):
+        sudo('git checkout %s' % env.branch)
+
+    sudo('chown -R %s %s' % (env.rails_user, env.code_root))
 
 
-def virtenvsudo(command):
-    activate = 'source %s/bin/activate' % env.virtenv
-    sudo(activate + ' && ' + command)
+def _install_rvm():
+    with cd(env.rails_user_home):
+        sudo('\curl -sSL https://get.rvm.io | bash -s stable', user=env.rails_user)
+        sudo('rvm install %s' % env.ruby_version, user=env.rails_user)
+        sudo('gem install rdoc-data; rdoc-data --install', user=env.rails_user)
+        sudo('gem install rails -v %s' % env.rails_version, user=env.rails_user)
 
 
-def _hg_clone():
-    sudo('hg clone %s %s' % (env.repository, env.code_root))
+def _install_require_gems():
+    run_with_production_mode('bundle')
+
+
+def _asset_precompile():
+    run_with_production_mode('rake assets:precompile')
+
+
+def _upload_unicorn_rb():
+    ''' upload rungunicorn conf '''
+    if isfile('config/unicorn.rb'):
+        # ''' we use user defined unicorn.rb file '''
+        template = 'config/unicorn.rb'
+    else:
+        template = '%s/conf/unicorn.rb' % fabungis_path
+    upload_template(template, env.unicorn_rb,
+                    context=env, backup=False, use_sudo=True)
+    sudo('chown %s %s' % (env.rails_user, env.unicorn_rb))
+
+
+def _upload_rununicorn_script():
+    ''' upload rungunicorn conf '''
+    if isfile('scripts/rununicorn.sh'):
+        ''' we use user defined rununicorn file '''
+        template = 'scripts/rununicorn.sh'
+    else:
+        template = '%s/scripts/rununicorn.sh' % fabungis_path
+    upload_template(template, env.rununicorn_script,
+                    context=env, backup=False, use_sudo=True)
+    sudo('chmod +x %s' % env.rununicorn_script)
+
+
+def run_with_production_mode(command):
+    with prefix('RAILS_ENV=%s' % env.rails_env), cd(env.rails_project_root):
+        sudo(command, user=env.rails_user)
 
 
 def _test_nginx_conf():
@@ -377,20 +569,28 @@ def _upload_nginx_conf():
         ''' we use user defined conf template '''
         template = 'conf/%s' % local_nginx_conf_file
     else:
-        template = '%s/conf/%s' % (fagungis_path, local_nginx_conf_file)
+        template = '%s/conf/%s' % (fabungis_path, local_nginx_conf_file)
     context = copy(env)
+
     # Template
     upload_template(template, env.nginx_conf_file,
                     context=context, backup=False, use_sudo=True)
 
-    sudo('ln -sf %s /etc/nginx/sites-enabled/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
+    try:
+        sudo('mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak')
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    sudo('ln -sf %s /etc/nginx/conf.d/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
     _test_nginx_conf()
-    sudo('nginx -s reload')
+    sudo('service nginx restart')
 
 
 def _reload_supervisorctl():
     sudo('%(supervisorctl)s reread' % env)
     sudo('%(supervisorctl)s reload' % env)
+    sudo('%(supervisorctl)s restart %(project)s' % env)
 
 
 def _upload_supervisord_conf():
@@ -399,37 +599,11 @@ def _upload_supervisord_conf():
         ''' we use user defined supervisord.conf template '''
         template = 'conf/supervisord.conf'
     else:
-        template = '%s/conf/supervisord.conf' % fagungis_path
+        template = '%s/conf/supervisord.conf' % fabungis_path
     upload_template(template, env.supervisord_conf_file,
                     context=env, backup=False, use_sudo=True)
-    sudo('ln -sf %s /etc/supervisor/conf.d/%s' % (env.supervisord_conf_file, basename(env.supervisord_conf_file)))
+    sudo('ln -sf %s /etc/supervisord.d/%s' % (env.supervisord_conf_file, basename(env.supervisord_conf_file)))
     _reload_supervisorctl()
-
-
-def _prepare_django_project():
-    with cd(env.django_project_root):
-        virtenvrun('./manage.py syncdb --noinput --verbosity=1')
-        if env.south_used:
-            virtenvrun('./manage.py migrate --noinput --verbosity=1')
-        virtenvsudo('./manage.py collectstatic --noinput')
-
-
-def _prepare_media_path():
-    path = env.django_media_path.rstrip('/')
-    sudo('mkdir -p %s' % path)
-    sudo('chmod -R 775 %s' % path)
-
-
-def _upload_rungunicorn_script():
-    ''' upload rungunicorn conf '''
-    if isfile('scripts/rungunicorn.sh'):
-        ''' we use user defined rungunicorn file '''
-        template = 'scripts/rungunicorn.sh'
-    else:
-        template = '%s/scripts/rungunicorn.sh' % fagungis_path
-    upload_template(template, env.rungunicorn_script,
-                    context=env, backup=False, use_sudo=True)
-    sudo('chmod +x %s' % env.rungunicorn_script)
 
 
 def _supervisor_restart():
