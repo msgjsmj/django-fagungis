@@ -47,6 +47,23 @@ def setup():
 
 
 @task
+def update():
+    puts(green_bg('Start setup...'))
+    start_time = datetime.now()
+
+    _verify_sudo()
+    _git_pull()
+    _install_require_gems()
+    _asset_precompile()
+    _supervisor_restart()
+
+
+    end_time = datetime.now()
+    finish_message = '[%s] Correctly finished in %i seconds' % \
+    (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
+    puts(finish_message)
+
+@task
 def setup_old():
     #  test configuration start
     if not test_configuration():
@@ -506,6 +523,17 @@ def _git_clone():
         sudo('git checkout %s' % env.branch)
 
     sudo('chown -R %s %s' % (env.rails_user, env.code_root))
+
+
+def _git_pull():
+    with cd(env.code_root):
+        sudo('git pull', user=env.rails_user)
+
+    with cd(env.code_root):
+        sudo('git checkout %s' % env.branch)
+
+    with cd(env.code_root):
+        sudo('git pull', user=env.rails_user)
 
 
 def _install_rvm():
