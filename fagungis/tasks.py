@@ -549,6 +549,7 @@ def _install_require_gems():
 
 
 def _asset_precompile():
+    run_with_production_mode('rake assets:clean:all')
     run_with_production_mode('rake assets:precompile')
 
 
