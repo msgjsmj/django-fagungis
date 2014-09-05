@@ -4,4 +4,4 @@ set -e
 source ~/.profile
 source ~/.rvm/scripts/rvm
 
-bundle exec unicorn_rails -c %(unicorn_rb)s
+RAILS_ENV=%(rails_env)s bundle exec unicorn_rails -c %(unicorn_rb)s

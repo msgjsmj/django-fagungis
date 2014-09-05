@@ -38,6 +38,7 @@ def setup():
     _upload_unicorn_rb()
     _upload_rununicorn_script()
     _upload_supervisord_conf()
+    _supervisor_restart()
 
 
     end_time = datetime.now()
@@ -51,6 +52,10 @@ def update():
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
+    # _upload_nginx_conf()
+    # _upload_unicorn_rb()
+    _upload_rununicorn_script()
+    _upload_supervisord_conf()
     _verify_sudo()
     _git_pull()
     _install_require_gems()
@@ -619,7 +624,6 @@ def _upload_nginx_conf():
 def _reload_supervisorctl():
     sudo('%(supervisorctl)s reread' % env)
     sudo('%(supervisorctl)s reload' % env)
-    sudo('%(supervisorctl)s restart %(project)s' % env)
 
 
 def _upload_supervisord_conf():
@@ -636,9 +640,15 @@ def _upload_supervisord_conf():
 
 
 def _supervisor_restart():
-    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
-        res = sudo('%(supervisorctl)s restart %(supervisor_program_name)s' % env)
-    if 'ERROR' in res:
-        print red_bg("%s NOT STARTED!" % env.supervisor_program_name)
-    else:
-        print green_bg("%s correctly started!" % env.supervisor_program_name)
+
+    try:
+        sudo('%(supervisorctl)s stop %(project)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('%(supervisorctl)s start %(supervisor_program_name)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")

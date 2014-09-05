@@ -12,7 +12,7 @@ def project():
     #  hg repository of your project
     env.repository = 'GIT_URL'
     env.branch = 'GIT_BRANCH'
-    env.rails_env = 'production'
+    env.rails_env = 'RAILS_ENV'
     #  hosts to deploy your project, users must be sudoers
     # env.hosts = ['root@172.16.252.132', ]
     env.hosts = ['USER@SERVER_URL', ]
