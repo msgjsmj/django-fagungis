@@ -30,6 +30,7 @@ def project():
         "ruby-devel",
         "ruby-rdoc",
         "rubygems",
+        "ImageMagick",
     ]
     #  system user, owner of the processes and code on your server
     #  the user and it's home dir will be created if not present
