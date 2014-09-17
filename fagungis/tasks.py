@@ -550,12 +550,12 @@ def _install_rvm():
 
 
 def _install_require_gems():
-    run_with_production_mode('bundle')
+    run_with_mode('bundle')
 
 
 def _asset_precompile():
-    run_with_production_mode('rake assets:clean:all')
-    run_with_production_mode('rake assets:precompile')
+    run_with_mode('rake assets:clean:all')
+    run_with_mode('rake assets:precompile')
 
 
 def _upload_unicorn_rb():
@@ -582,9 +582,9 @@ def _upload_rununicorn_script():
     sudo('chmod +x %s' % env.rununicorn_script)
 
 
-def run_with_production_mode(command):
-    with prefix('RAILS_ENV=%s' % env.rails_env), cd(env.rails_project_root):
-        sudo(command, user=env.rails_user)
+def run_with_mode(command):
+    with cd(env.rails_project_root):
+        sudo('RAILS_ENV=%s %s' % (env.rails_env, command), user=env.rails_user)
 
 
 def _test_nginx_conf():
