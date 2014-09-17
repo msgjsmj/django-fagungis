@@ -85,6 +85,14 @@ def project():
     env.unicorn_pids = '%(rails_user_home)s/pids' % env
     # END gunicorn settings ###
 
+    # START Resque settings
+    env.runresque_script = '%(rails_user_home)s/scripts/runresque_%(project)s.sh' % env
+    env.resque_term_timeout = 4
+    env.resque_term_child = 1
+    env.resque_interval = 0.1
+    env.resque_queue = '*'
+    # END Resque settings
+
     ### START nginx settings ###
     env.nginx_server_name = 'example.com'  # Only domain name, without 'www' or 'http://'
     env.nginx_conf_file = '%(rails_user_home)s/configs/nginx/%(project)s.conf' % env
@@ -106,3 +114,14 @@ def project():
     env.supervisor_stdout_logfile = '%(rails_user_home)s/logs/projects/supervisord_%(project)s.log' % env
     env.supervisord_conf_file = '%(rails_user_home)s/configs/supervisord/%(project)s.conf' % env
     ### END supervisor settings ###
+
+    ### START supervisor_resque settings ###
+    # http://supervisord.org/configuration.html#program-x-section-settings
+    # default: env.project
+    env.supervisor_resque_name = '%s_resque' % (env.project)
+    env.supervisor_resque_autostart = 'true'  # true or false
+    env.supervisor_resque_autorestart = 'true'  # true or false
+    env.supervisor_resque_redirect_stderr = 'true'  # true or false
+    env.supervisor_resque_stdout_logfile = '%(rails_user_home)s/logs/projects/supervisord_%(supervisor_resque_name)s.log' % env
+    env.supervisord_resque_conf_file = '%(rails_user_home)s/configs/supervisord/%(supervisor_resque_name)s.conf' % env
+    ### END supervisor_resque settings ###

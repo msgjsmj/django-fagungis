@@ -37,9 +37,11 @@ def setup():
     _upload_nginx_conf()
     _upload_unicorn_rb()
     _upload_rununicorn_script()
+    _upload_runresque_script()
     _upload_supervisord_conf()
+    _upload_supervisord_resque_conf()
     _supervisor_restart()
-
+    _supervisor_resque_restart()
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly finished in %i seconds' % \
@@ -54,13 +56,16 @@ def update():
 
     # _upload_nginx_conf()
     # _upload_unicorn_rb()
-    _upload_rununicorn_script()
-    _upload_supervisord_conf()
     _verify_sudo()
     _git_pull()
     _install_require_gems()
-    _asset_precompile()
+    # _asset_precompile()
+    _upload_rununicorn_script()
+    _upload_runresque_script()
+    _upload_supervisord_conf()
+    _upload_supervisord_resque_conf()
     _supervisor_restart()
+    _supervisor_resque_restart()
 
 
     end_time = datetime.now()
@@ -582,6 +587,17 @@ def _upload_rununicorn_script():
     sudo('chmod +x %s' % env.rununicorn_script)
 
 
+def _upload_runresque_script():
+    if isfile('scripts/runresque.sh'):
+        ''' we use user defined runresque file '''
+        template = 'scripts/runresque.sh'
+    else:
+        template = '%s/scripts/runresque.sh' % fabungis_path
+    upload_template(template, env.runresque_script,
+                    context=env, backup=False, use_sudo=True)
+    sudo('chmod +x %s' % env.runresque_script)
+
+
 def run_with_mode(command):
     with cd(env.rails_project_root):
         sudo('RAILS_ENV=%s %s' % (env.rails_env, command), user=env.rails_user)
@@ -639,6 +655,19 @@ def _upload_supervisord_conf():
     _reload_supervisorctl()
 
 
+def _upload_supervisord_resque_conf():
+    ''' upload supervisor_resque conf '''
+    if isfile('conf/supervisord_resque.conf'):
+        ''' we use user defined supervisord_resque.conf template '''
+        template = 'conf/supervisord_resque.conf'
+    else:
+        template = '%s/conf/supervisord_resque.conf' % fabungis_path
+    upload_template(template, env.supervisord_resque_conf_file,
+                    context=env, backup=False, use_sudo=True)
+    sudo('ln -sf %s /etc/supervisord.d/%s' % (env.supervisord_resque_conf_file, basename(env.supervisord_resque_conf_file)))
+    _reload_supervisorctl()
+
+
 def _supervisor_restart():
 
     try:
@@ -649,6 +678,21 @@ def _supervisor_restart():
 
     try:
         sudo('%(supervisorctl)s start %(supervisor_program_name)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+
+def _supervisor_resque_restart():
+
+    try:
+        sudo('%(supervisorctl)s stop %(supervisor_resque_name)s' % env)
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    try:
+        sudo('%(supervisorctl)s start %(supervisor_resque_name)s' % env)
     except:
         if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
