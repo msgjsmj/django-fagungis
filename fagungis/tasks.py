@@ -33,6 +33,7 @@ def setup():
     _git_clone()
     _install_rvm()
     _install_require_gems()
+    _migrate_db()
     _asset_precompile()
     _upload_nginx_conf()
     _upload_unicorn_rb()
@@ -54,12 +55,14 @@ def update():
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
-    # _upload_nginx_conf()
-    # _upload_unicorn_rb()
+
     _verify_sudo()
     _git_pull()
     _install_require_gems()
-    # _asset_precompile()
+    _migrate_db()
+    _asset_precompile()
+    # _upload_nginx_conf()
+    # _upload_unicorn_rb()
     _upload_rununicorn_script()
     _upload_runresque_script()
     _upload_supervisord_conf()
@@ -72,6 +75,7 @@ def update():
     finish_message = '[%s] Correctly finished in %i seconds' % \
     (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
     puts(finish_message)
+
 
 @task
 def setup_old():
@@ -556,6 +560,10 @@ def _install_rvm():
 
 def _install_require_gems():
     run_with_mode('bundle')
+
+
+def _migrate_db():
+    run_with_mode('rake db:migrate')
 
 
 def _asset_precompile():
