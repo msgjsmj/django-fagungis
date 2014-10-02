@@ -6,6 +6,7 @@ from os.path import basename, abspath, dirname, isfile, join
 from fabric.api import env, puts, abort, cd, hide, task
 from fabric.operations import sudo, settings, run
 from fabric.contrib import console
+from fabric.contrib.console import confirm
 from fabric.contrib.files import upload_template
 
 from fabric.colors import _wrap_with, green
@@ -22,6 +23,211 @@ fagungis_path = dirname(abspath(__file__))
 
 @task
 def setup():
+
+    puts(green_bg('Start setup...'))
+    start_time = datetime.now()
+
+    # _verify_sudo()
+    # _install_dependencies()
+    # _create_django_user()
+    # _setup_directories()
+    # _install_python3()
+    # _install_virtualenv()
+    # _create_virtualenv()
+    # _git_clone()
+    # _install_gunicorn()
+    _install_requirements()
+
+    # _upload_nginx_conf()
+    # _upload_rungunicorn_script()
+    # _upload_supervisord_conf()
+
+    end_time = datetime.now()
+    finish_message = '[%s] Correctly finished in %i seconds' % \
+    (green_bg(end_time.strftime('%H:%M:%S')), (end_time - start_time).seconds)
+    puts(finish_message)
+
+
+def _verify_sudo():
+    # we just check if the user is sudoers
+    sudo('cd .')
+
+
+def _install_dependencies():
+    # Ensure those Debian/Ubuntu packages are installed
+    packages = [
+        "openssl-devel",
+        "wget",
+        "bzip2-devel",
+        "zlib-devel",
+        "python-pip",
+    ]
+    _add_yum_repositories()
+    sudo("yum -y update")
+    sudo('yum -y groupinstall "Development Tools"')
+    sudo("yum -y install %s" % " ".join(packages))
+    if "additional_packages" in env and env.additional_packages:
+        sudo("yum -y install %s" % " ".join(env.additional_packages))
+    sudo("yum -y --enablerepo=rpmforge-extras update git")
+    _install_nginx()
+    sudo("pip install --upgrade pip")
+
+
+def _install_nginx():
+    # add nginx stable ppa
+    sudo("yum -y install nginx")
+    sudo("chkconfig nginx on")
+    sudo("service nginx start")
+
+
+def _add_yum_repositories():
+    # add EPEL repo
+    try:
+        sudo("rpm --import http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-6")
+        sudo("rpm -Uvh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm")
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+    # add rpmforge repo
+    try:
+        sudo("rpm --import http://apt.sw.be/RPM-GPG-KEY.dag.txt")
+        sudo("rpm -ivh http://pkgs.repoforge.org/rpmforge-release/rpmforge-release-0.5.3-1.el6.rf.x86_64.rpm")
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
+
+
+def _create_django_user():
+    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
+        res = sudo('useradd %(django_user)s' % env)
+    if 'already exists' in res:
+        puts('User \'%(django_user)s\' already exists, will not be changed.' % env)
+        return
+    #  set password
+    sudo('passwd %(django_user)s' % env)
+
+
+def _setup_directories():
+    sudo('mkdir -p %(projects_path)s' % env)
+    # sudo('mkdir -p %(django_user_home)s/logs/nginx' % env)  # Not used
+    # prepare gunicorn_logfile
+    sudo('mkdir -p %s' % dirname(env.gunicorn_logfile))
+    sudo('chown %s %s' % (env.django_user, dirname(env.gunicorn_logfile)))
+    sudo('chmod -R 775 %s' % dirname(env.gunicorn_logfile))
+    sudo('touch %s' % env.gunicorn_logfile)
+    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
+    # prepare supervisor_stdout_logfile
+    sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
+    sudo('chown %s %s' % (env.django_user, dirname(env.supervisor_stdout_logfile)))
+    sudo('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
+    sudo('touch %s' % env.supervisor_stdout_logfile)
+    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
+
+    sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
+    sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
+    sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
+    # sudo('mkdir -p %(django_user_home)s/tmp' % env)  # Not used
+    sudo('mkdir -p %(virtenv)s' % env)
+    sudo('mkdir -p %(nginx_htdocs)s' % env)
+    sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
+
+
+def _git_clone():
+    sudo('git clone %s %s' % (env.repository, env.code_root))
+
+
+def _install_python3():
+    if not env.python3_use:
+        return
+
+    with cd('/tmp'):
+        sudo('wget %s' % env.python3_url)
+        sudo('tar xf %s' % basename(env.python3_url))
+    with cd('/tmp/%s' % env.python3_ver):
+        sudo('./configure')
+        sudo('make && make install')
+
+
+def _install_virtualenv():
+    sudo('pip install virtualenv')
+
+
+def _create_virtualenv():
+    if env.python3_use:
+        sudo('virtualenv -p %s %s' % ('/usr/local/bin/python3', env.virtenv))
+    else:
+        sudo('virtualenv %s' % env.virtenv)
+
+
+def _install_gunicorn():
+    """ force gunicorn installation into your virtualenv, even if it's installed globally.
+    for more details: https://github.com/benoitc/gunicorn/pull/280 """
+    virtenvsudo('pip install -I gunicorn')
+
+
+def _install_requirements():
+    ''' you must have a file called requirements.txt in your project root'''
+    if 'requirements_file' in env and env.requirements_file:
+        virtenvsudo('pip install -r %s' % env.requirements_file)
+
+
+def _upload_nginx_conf():
+    ''' upload nginx conf '''
+    local_nginx_conf_file = 'nginx.conf'
+    if env.nginx_https:
+        local_nginx_conf_file = 'nginx_https.conf'
+    if isfile('conf/%s' % local_nginx_conf_file):
+        ''' we use user defined conf template '''
+        template = 'conf/%s' % local_nginx_conf_file
+    else:
+        template = '%s/conf/%s' % (fagungis_path, local_nginx_conf_file)
+    context = copy(env)
+    # Template
+    upload_template(template, env.nginx_conf_file,
+                    context=context, backup=False, use_sudo=True)
+
+    sudo('ln -sf %s /etc/nginx/sites-enabled/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
+    _test_nginx_conf()
+    sudo('nginx -s reload')
+
+
+
+# Utils
+
+def virtenvrun(command):
+    activate = 'source %s/bin/activate' % env.virtenv
+    run(activate + ' && ' + command)
+
+
+def virtenvsudo(command):
+    activate = 'source %s/bin/activate' % env.virtenv
+    sudo(activate + ' && ' + command)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################################################################################################
+# old codes
+########################################################################################################################
+
+
+
+@task
+def setup_old():
     #  test configuration start
     if not test_configuration():
         if not console.confirm("Configuration test %s! Do you want to continue?" % red_bg('failed'), default=False):
@@ -262,99 +468,11 @@ def test_configuration(verbose=True):
 ########################
 
 
-def _create_django_user():
-    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
-        res = sudo('useradd -d %(django_user_home)s -m -r %(django_user)s' % env)
-    if 'already exists' in res:
-        puts('User \'%(django_user)s\' already exists, will not be changed.' % env)
-        return
-    #  set password
-    sudo('passwd %(django_user)s' % env)
 
 
-def _verify_sudo():
-    ''' we just check if the user is sudoers '''
-    sudo('cd .')
 
 
-def _install_nginx():
-    # add nginx stable ppa
-    sudo("add-apt-repository ppa:nginx/stable")
-    sudo("apt-get update")
-    sudo("apt-get -y install nginx")
-    sudo("/etc/init.d/nginx start")
 
-
-def _install_dependencies():
-    ''' Ensure those Debian/Ubuntu packages are installed '''
-    packages = [
-        "python-software-properties",
-        "python-dev",
-        "build-essential",
-        "python-pip",
-        "supervisor",
-    ]
-    sudo("apt-get update")
-    sudo("apt-get -y install %s" % " ".join(packages))
-    if "additional_packages" in env and env.additional_packages:
-        sudo("apt-get -y install %s" % " ".join(env.additional_packages))
-    _install_nginx()
-    sudo("pip install --upgrade pip")
-
-
-def _install_requirements():
-    ''' you must have a file called requirements.txt in your project root'''
-    if 'requirements_file' in env and env.requirements_file:
-        virtenvsudo('pip install -r %s' % env.requirements_file)
-
-
-def _install_gunicorn():
-    """ force gunicorn installation into your virtualenv, even if it's installed globally.
-    for more details: https://github.com/benoitc/gunicorn/pull/280 """
-    virtenvsudo('pip install -I gunicorn')
-
-
-def _install_virtualenv():
-    sudo('pip install virtualenv')
-
-
-def _create_virtualenv():
-    sudo('virtualenv --%s %s' % (' --'.join(env.virtenv_options), env.virtenv))
-
-
-def _setup_directories():
-    sudo('mkdir -p %(projects_path)s' % env)
-    # sudo('mkdir -p %(django_user_home)s/logs/nginx' % env)  # Not used
-    # prepare gunicorn_logfile
-    sudo('mkdir -p %s' % dirname(env.gunicorn_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.gunicorn_logfile)))
-    sudo('chmod -R 775 %s' % dirname(env.gunicorn_logfile))
-    sudo('touch %s' % env.gunicorn_logfile)
-    sudo('chown %s %s' % (env.django_user, env.gunicorn_logfile))
-    # prepare supervisor_stdout_logfile
-    sudo('mkdir -p %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('chown %s %s' % (env.django_user, dirname(env.supervisor_stdout_logfile)))
-    sudo('chmod -R 775 %s' % dirname(env.supervisor_stdout_logfile))
-    sudo('touch %s' % env.supervisor_stdout_logfile)
-    sudo('chown %s %s' % (env.django_user, env.supervisor_stdout_logfile))
-
-    sudo('mkdir -p %s' % dirname(env.nginx_conf_file))
-    sudo('mkdir -p %s' % dirname(env.supervisord_conf_file))
-    sudo('mkdir -p %s' % dirname(env.rungunicorn_script))
-    # sudo('mkdir -p %(django_user_home)s/tmp' % env)  # Not used
-    sudo('mkdir -p %(virtenv)s' % env)
-    sudo('mkdir -p %(nginx_htdocs)s' % env)
-    sudo('echo "<html><body>nothing here</body></html> " > %(nginx_htdocs)s/index.html' % env)
-
-
-def virtenvrun(command):
-    activate = 'source %s/bin/activate' % env.virtenv
-    run(activate + ' && ' + command)
-
-
-def virtenvsudo(command):
-    activate = 'source %s/bin/activate' % env.virtenv
-    sudo(activate + ' && ' + command)
 
 
 def _hg_clone():
@@ -368,24 +486,6 @@ def _test_nginx_conf():
         abort(red_bg('NGINX configuration test failed! Please review your parameters.'))
 
 
-def _upload_nginx_conf():
-    ''' upload nginx conf '''
-    local_nginx_conf_file = 'nginx.conf'
-    if env.nginx_https:
-        local_nginx_conf_file = 'nginx_https.conf'
-    if isfile('conf/%s' % local_nginx_conf_file):
-        ''' we use user defined conf template '''
-        template = 'conf/%s' % local_nginx_conf_file
-    else:
-        template = '%s/conf/%s' % (fagungis_path, local_nginx_conf_file)
-    context = copy(env)
-    # Template
-    upload_template(template, env.nginx_conf_file,
-                    context=context, backup=False, use_sudo=True)
-
-    sudo('ln -sf %s /etc/nginx/sites-enabled/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
-    _test_nginx_conf()
-    sudo('nginx -s reload')
 
 
 def _reload_supervisorctl():
