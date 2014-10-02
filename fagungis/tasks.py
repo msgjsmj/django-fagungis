@@ -27,15 +27,15 @@ def setup():
     puts(green_bg('Start setup...'))
     start_time = datetime.now()
 
-    # _verify_sudo()
-    # _install_dependencies()
-    # _create_django_user()
-    # _setup_directories()
-    # _install_python3()
-    # _install_virtualenv()
-    # _create_virtualenv()
-    # _git_clone()
-    # _install_gunicorn()
+    _verify_sudo()
+    _install_dependencies()
+    _create_django_user()
+    _setup_directories()
+    _install_python3()
+    _install_virtualenv()
+    _create_virtualenv()
+    _git_clone()
+    _install_gunicorn()
     _install_requirements()
 
     # _upload_nginx_conf()
@@ -60,6 +60,7 @@ def _install_dependencies():
         "wget",
         "bzip2-devel",
         "zlib-devel",
+        "postgresql-devel",
         "python-pip",
     ]
     _add_yum_repositories()
