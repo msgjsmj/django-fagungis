@@ -29,6 +29,8 @@ def setup():
 
     _verify_sudo()
     _install_dependencies()
+    _install_nginx()
+    _install_supervisor()
     _create_django_user()
     _setup_directories()
     _install_python3()
@@ -38,7 +40,7 @@ def setup():
     _install_gunicorn()
     _install_requirements()
 
-    # _upload_nginx_conf()
+    _upload_nginx_conf()
     # _upload_rungunicorn_script()
     # _upload_supervisord_conf()
 
@@ -70,13 +72,38 @@ def _install_dependencies():
     if "additional_packages" in env and env.additional_packages:
         sudo("yum -y install %s" % " ".join(env.additional_packages))
     sudo("yum -y --enablerepo=rpmforge-extras update git")
-    _install_nginx()
-    sudo("pip install --upgrade pip")
+
+    sudo("pip install -U distribute")
+    sudo("pip install -U setuptools")
+    sudo("pip install -U pip")
+
+
+def _install_supervisor():
+    sudo("pip install supervisor")
+    sudo("echo_supervisord_conf > /etc/supervisord.conf")
+    sudo("mkdir /etc/supervisord.d")
+    sudo('echo "[include]" >> /etc/supervisord.conf')
+    sudo('echo "files = /etc/supervisord.d/*.conf" >> /etc/r'
+         'supervisord.conf')
+
+    # upload supervisord init file
+    if isfile('conf/supervisord'):
+        # use user defined file
+        template = 'conf/supervisord'
+    else:
+        template = '%s/conf/supervisord' % fagungis_path
+    upload_template(template, '/etc/init.d/supervisord',
+                    context=env, backup=False, use_sudo=True)
+    sudo("chmod 700 /etc/init.d/supervisord")
+    sudo("service supervisord start")
+    sudo("chkconfig --add supervisord")
+    sudo("chkconfig supervisord on")
 
 
 def _install_nginx():
     # add nginx stable ppa
     sudo("yum -y install nginx")
+    sudo("mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak")
     sudo("chkconfig nginx on")
     sudo("service nginx start")
 
@@ -162,24 +189,24 @@ def _create_virtualenv():
 
 
 def _install_gunicorn():
-    """ force gunicorn installation into your virtualenv, even if it's installed globally.
-    for more details: https://github.com/benoitc/gunicorn/pull/280 """
+    # force gunicorn installation into your virtualenv, even if it's installed globally.
+    # for more details: https://github.com/benoitc/gunicorn/pull/280
     virtenvsudo('pip install -I gunicorn')
 
 
 def _install_requirements():
-    ''' you must have a file called requirements.txt in your project root'''
+    # you must have a file called requirements.txt in your project root
     if 'requirements_file' in env and env.requirements_file:
         virtenvsudo('pip install -r %s' % env.requirements_file)
 
 
 def _upload_nginx_conf():
-    ''' upload nginx conf '''
+    # upload nginx conf
     local_nginx_conf_file = 'nginx.conf'
     if env.nginx_https:
         local_nginx_conf_file = 'nginx_https.conf'
     if isfile('conf/%s' % local_nginx_conf_file):
-        ''' we use user defined conf template '''
+        # we use user defined conf template
         template = 'conf/%s' % local_nginx_conf_file
     else:
         template = '%s/conf/%s' % (fagungis_path, local_nginx_conf_file)
@@ -188,10 +215,16 @@ def _upload_nginx_conf():
     upload_template(template, env.nginx_conf_file,
                     context=context, backup=False, use_sudo=True)
 
-    sudo('ln -sf %s /etc/nginx/sites-enabled/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
+    sudo('ln -sf %s /etc/nginx/conf.d/%s' % (env.nginx_conf_file, basename(env.nginx_conf_file)))
     _test_nginx_conf()
     sudo('nginx -s reload')
 
+
+def _test_nginx_conf():
+    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
+        res = sudo('nginx -t')
+    if 'test failed' in res:
+        abort(red_bg('NGINX configuration test failed! Please review your parameters.'))
 
 
 # Utils
@@ -206,7 +239,9 @@ def virtenvsudo(command):
     sudo(activate + ' && ' + command)
 
 
-
+def _reload_supervisorctl():
+    sudo('%(supervisorctl)s reread' % env)
+    sudo('%(supervisorctl)s reload' % env)
 
 
 
@@ -480,18 +515,11 @@ def _hg_clone():
     sudo('hg clone %s %s' % (env.repository, env.code_root))
 
 
-def _test_nginx_conf():
-    with settings(hide('running', 'stdout', 'stderr', 'warnings'), warn_only=True):
-        res = sudo('nginx -t -c /etc/nginx/nginx.conf')
-    if 'test failed' in res:
-        abort(red_bg('NGINX configuration test failed! Please review your parameters.'))
 
 
 
 
-def _reload_supervisorctl():
-    sudo('%(supervisorctl)s reread' % env)
-    sudo('%(supervisorctl)s reload' % env)
+
 
 
 def _upload_supervisord_conf():

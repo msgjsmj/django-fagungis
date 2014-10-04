@@ -11,7 +11,7 @@ def project():
     #  git repository of your project
     env.repository = 'https://github.com/touchworks/mytouching.git'
     #  hosts to deploy your project, users must be sudoers
-    env.hosts = ['root@172.16.252.132', ]
+    env.hosts = ['root@192.168.180.199', ]
     # additional packages to be installed on the server
     env.additional_packages = []
 
