@@ -7,11 +7,12 @@ from fagungis.tasks import *
 @task
 def project():
     #  name of your project - no spaces, no special chars
-    env.project = 'example_production'
+    env.project = 'mytouching'
     #  git repository of your project
     env.repository = 'https://github.com/touchworks/mytouching.git'
     #  hosts to deploy your project, users must be sudoers
-    env.hosts = ['root@192.168.180.199', ]
+    env.hosts = ['ec2-user@ec2-54-64-224-70.ap-northeast-1.compute.amazonaws.com', ]
+    # env.hosts = ['root@192.168.180.199', ]
     # additional packages to be installed on the server
     env.additional_packages = []
 
@@ -27,6 +28,13 @@ def project():
     env.projects_path = join(env.django_user_home, 'projects')
     #  the root path of your project
     env.code_root = join(env.projects_path, env.project)
+    env.project_pids_path = join(env.django_user_home, 'pids')
+    #  django public path
+    env.django_public_path = join(env.code_root, 'public')
+    #  django static url and root dir
+    env.django_static_url = '/static/'
+    env.django_static_root = join(env.django_public_path, 'static')
+
 
     #  virtualenv root
     env.virtenv = join(env.django_user_home, 'envs', env.project)
@@ -38,7 +46,7 @@ def project():
 
     ### START gunicorn settings ###
     #  be sure to not have anything running on that port
-    env.gunicorn_bind = "127.0.0.1:8100"
+    env.gunicorn_bind = "unix:/tmp/%s.sock" % env.project
     env.gunicorn_logfile = '%(django_user_home)s/logs/projects/%(project)s_gunicorn.log' % env
     env.rungunicorn_script = '%(django_user_home)s/scripts/rungunicorn_%(project)s.sh' % env
     env.gunicorn_workers = 2

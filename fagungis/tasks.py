@@ -41,8 +41,8 @@ def setup():
     _install_requirements()
 
     _upload_nginx_conf()
-    # _upload_rungunicorn_script()
-    # _upload_supervisord_conf()
+    _upload_rungunicorn_script()
+    _upload_supervisord_conf()
 
     end_time = datetime.now()
     finish_message = '[%s] Correctly finished in %i seconds' % \
@@ -81,10 +81,13 @@ def _install_dependencies():
 def _install_supervisor():
     sudo("pip install supervisor")
     sudo("echo_supervisord_conf > /etc/supervisord.conf")
-    sudo("mkdir /etc/supervisord.d")
+    try:
+        sudo("mkdir /etc/supervisord.d")
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
     sudo('echo "[include]" >> /etc/supervisord.conf')
-    sudo('echo "files = /etc/supervisord.d/*.conf" >> /etc/r'
-         'supervisord.conf')
+    sudo('echo "files = /etc/supervisord.d/*.conf" >> /etc/supervisord.conf')
 
     # upload supervisord init file
     if isfile('conf/supervisord'):
@@ -103,7 +106,11 @@ def _install_supervisor():
 def _install_nginx():
     # add nginx stable ppa
     sudo("yum -y install nginx")
-    sudo("mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak")
+    try:
+        sudo("mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak")
+    except:
+        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+            abort("Aborting at user request.")
     sudo("chkconfig nginx on")
     sudo("service nginx start")
 
@@ -531,12 +538,12 @@ def _upload_supervisord_conf():
         template = '%s/conf/supervisord.conf' % fagungis_path
     upload_template(template, env.supervisord_conf_file,
                     context=env, backup=False, use_sudo=True)
-    sudo('ln -sf %s /etc/supervisor/conf.d/%s' % (env.supervisord_conf_file, basename(env.supervisord_conf_file)))
+    sudo('ln -sf %s /etc/supervisord.d/%s' % (env.supervisord_conf_file, basename(env.supervisord_conf_file)))
     _reload_supervisorctl()
 
 
 def _prepare_django_project():
-    with cd(env.django_project_root):
+    with cd(env.code_root):
         virtenvrun('./manage.py syncdb --noinput --verbosity=1')
         if env.south_used:
             virtenvrun('./manage.py migrate --noinput --verbosity=1')
