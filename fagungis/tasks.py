@@ -414,11 +414,7 @@ def _install_supervisor():
     sudo("chkconfig --add supervisord")
     sudo("chkconfig supervisord on")
 
-    try:
-        sudo("service supervisord restart")
-    except:
-        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
-            abort("Aborting at user request.")
+    _reload_supervisorctl()
 
 
 def _install_redis():
@@ -646,6 +642,10 @@ def _upload_nginx_conf():
 
 
 def _reload_supervisorctl():
+    result = sudo('service supervisord status')
+    if "STOPPED" in result:
+        sudo('service supervisord start')
+
     sudo('%(supervisorctl)s reread' % env)
     sudo('%(supervisorctl)s reload' % env)
 
