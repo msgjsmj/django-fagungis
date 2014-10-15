@@ -9,6 +9,8 @@
 # To make Supervisor start automatically at boot, make this
 # file executable:  chmod 755 /etc/rc.d/rc.supervisord
 
+# chkconfig: - 50 50
+
 # Time to wait between stop/start on a restart
 SHUTDOWN_TIME=5
 
