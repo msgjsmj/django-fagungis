@@ -678,14 +678,14 @@ def _upload_supervisord_resque_conf():
 
 def _supervisor_restart():
 
-    try:
-        sudo('%(supervisorctl)s stop %(project)s' % env)
-    except:
-        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
-            abort("Aborting at user request.")
+    # try:
+    #     sudo('%(supervisorctl)s stop %(project)s' % env)
+    # except:
+    #     if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+    #         abort("Aborting at user request.")
 
     try:
-        sudo('%(supervisorctl)s start %(supervisor_program_name)s' % env)
+        sudo('%(supervisorctl)s restart %(supervisor_program_name)s' % env)
     except:
         if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
@@ -693,14 +693,14 @@ def _supervisor_restart():
 
 def _supervisor_resque_restart():
 
-    try:
-        sudo('%(supervisorctl)s stop %(supervisor_resque_name)s' % env)
-    except:
-        if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
-            abort("Aborting at user request.")
+    # try:
+    #     sudo('%(supervisorctl)s stop %(supervisor_resque_name)s' % env)
+    # except:
+    #     if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
+    #         abort("Aborting at user request.")
 
     try:
-        sudo('%(supervisorctl)s start %(supervisor_resque_name)s' % env)
+        sudo('%(supervisorctl)s restart %(supervisor_resque_name)s' % env)
     except:
         if not confirm("%s! Do you want to continue?" % red_bg('failed'), default=False):
             abort("Aborting at user request.")
